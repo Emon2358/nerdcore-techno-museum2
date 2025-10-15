@@ -10,11 +10,8 @@ from html.parser import HTMLParser
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ▼▼▼ 変更点 ▼▼▼
-# ダウンロードフォルダ
-DOWNLOAD_DIR = "nerdcore technos"
-# ▲▲▲ 変更点 ▲▲▲
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+# ベースとなるダウンロードフォルダ
+BASE_DOWNLOAD_DIR = "nerdcore technos"
 
 class LinkParser(HTMLParser):
     def __init__(self, base_url):
@@ -34,16 +31,25 @@ class LinkParser(HTMLParser):
                     self.links.append(full_url)
 
 class MusicDownloader:
-    def __init__(self):
+    # ▼▼▼ 変更点 ▼▼▼
+    # 初期化時にサブフォルダのパスを受け取るように変更
+    def __init__(self, subfolder_path):
+        # 指定されたサブフォルダを含めた完全なパスを作成
+        full_download_path = os.path.join(BASE_DOWNLOAD_DIR, subfolder_path)
+        os.makedirs(full_download_path, exist_ok=True)
+        logger.info(f"📁 ダウンロード先フォルダ: {full_download_path}")
+
         self.ydl_opts = {
             'format': 'bestaudio/best',
-            # ▼▼▼ 変更点 ▼▼▼
-            'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
-            # ▲▲▲ 変更点 ▲▲▲
+            # ダウンロード先のパスを更新
+            'outtmpl': f'{full_download_path}/%(title)s.%(ext)s',
+            # ポストプロセッサをflacからmp3に変更
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'flac',
+                'preferredcodec': 'mp3',
+                'preferredquality': '320', # 高音質な320kbpsに設定
             }],
+            # ▲▲▲ 変更点 ▲▲▲
             'extract_flat': False,
             'noplaylist': False,
             'ignoreerrors': False,
@@ -56,25 +62,20 @@ class MusicDownloader:
         try:
             logger.info(f"🎵 解析とダウンロードを開始: {url}")
 
-            # ソースタイプの判定
             if source_type == 'auto_detect':
                 source_type = self.detect_source_type(url)
 
-            # ソースタイプに基づいたダウンロード
             if source_type in ['soundcloud', 'bandcamp', 'direct_link']:
                 if not any(platform in url for platform in ['soundcloud.com', 'bandcamp.com']):
                     logger.error("🚫 SoundCloudまたはBandcampのURLを指定してください。")
                     return False
 
-            # スクレイピングして内部リンクを取得
             internal_links = []
             if scrape_internal_links or source_type == 'archive':
                 internal_links = self.scrape_internal_links(url)
 
-            # URLをダウンロード
             self.download_track(url)
 
-            # スクレイピングしたリンクもダウンロード
             for link in internal_links:
                 self.download_track(link)
 
@@ -98,8 +99,6 @@ class MusicDownloader:
     def scrape_internal_links(self, url):
         """指定されたURLから内部リンクをスクレイピング"""
         logger.info(f"🔍 内部リンクをスクレイピング中: {url}")
-
-        # URLからHTMLを取得
         try:
             with urlopen(url) as response:
                 html = response.read().decode('utf-8')
@@ -107,10 +106,8 @@ class MusicDownloader:
             logger.error(f"URLを開けませんでした: {e}")
             return []
 
-        # リンクを解析
         parser = LinkParser(url)
         parser.feed(html)
-
         logger.info(f"✨ 見つかった内部リンク: {parser.links}")
         return parser.links
 
@@ -124,19 +121,24 @@ class MusicDownloader:
                 logger.error(f"⚠️ ダウンロード中にエラーが発生: {str(e)}")
 
 def main():
-    if len(sys.argv) < 4:
-        logger.error("❌ URLとダウンロード方法、ソースタイプが指定されていません。")
-        print("使用方法: python downloader.py <URL1> <URL2> ... <scrape_internal_links> <source_type>")
+    # ▼▼▼ 変更点 ▼▼▼
+    # 引数の数をチェック (URLxN + scrape_bool + source_type + subfolder)
+    if len(sys.argv) < 5:
+        logger.error("❌ 引数が不足しています。")
+        print("使用方法: python downloader.py <URL1> ... <scrape_bool> <source_type> <subfolder>")
         sys.exit(1)
 
-    # 最後の2つの引数を取得
-    scrape_internal_links = sys.argv[-2].lower() == 'true'
-    source_type = sys.argv[-1]
+    # 最後の引数をサブフォルダとして取得
+    subfolder = sys.argv[-1]
+    source_type = sys.argv[-2]
+    scrape_internal_links = sys.argv[-3].lower() == 'true'
 
-    # 最初の引数からURLを取得
-    urls = sys.argv[1:-2]
+    # URLを取得
+    urls = sys.argv[1:-3]
 
-    downloader = MusicDownloader()
+    # MusicDownloaderにサブフォルダ名を渡す
+    downloader = MusicDownloader(subfolder_path=subfolder)
+    # ▲▲▲ 変更点 ▲▲▲
 
     for url in urls:
         success = downloader.download(url, scrape_internal_links, source_type)
