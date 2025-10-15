@@ -7,6 +7,13 @@ on:
         description: 'ダウンロードするURLをカンマ区切りで入力'
         required: true
         type: string
+      # ▼▼▼ 変更点 ▼▼▼
+      subfolder:
+        description: 'nerdcore technos内に作成するサブフォルダ名 (例: artist/album)'
+        required: true
+        type: string
+        default: 'misc' # デフォルト値を設定
+      # ▲▲▲ 変更点 ▲▲▲
       scrape_internal_links:
         description: '内部リンクをスクレイピングしますか？'
         required: true
@@ -43,44 +50,40 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Pythonの依存関係をインストール
+      - name: 依存関係をインストール
         run: |
           python -m pip install --upgrade pip
-          pip install yt-dlp setuptools wheel
-
-      - name: 必要なパッケージをインストール
-        run: |
-          pip install yt-dlp requests beautifulsoup4
+          pip install yt-dlp requests
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-
-      # ▼▼▼ 変更点 ▼▼▼
-      - name: nerdcore technosディレクトリの作成
-        run: mkdir -p "nerdcore technos"
-      # ▲▲▲ 変更点 ▲▲▲
 
       - name: 音楽をダウンロード
         env:
           INPUT_URL: ${{ github.event.inputs.url }}
+          INPUT_SUBFOLDER: ${{ github.event.inputs.subfolder }}
           INPUT_SCRAPE_LINKS: ${{ github.event.inputs.scrape_internal_links }}
           INPUT_SOURCE_TYPE: ${{ github.event.inputs.source_type }}
         run: |
           IFS=',' read -r -a URL_ARRAY <<< "$INPUT_URL"
           for url in "${URL_ARRAY[@]}"; do
-            python downloader.py "$url" "$INPUT_SCRAPE_LINKS" "$INPUT_SOURCE_TYPE"
+            # ▼▼▼ 変更点 ▼▼▼
+            # 最後にサブフォルダの引数を追加
+            python downloader.py "$url" "$INPUT_SCRAPE_LINKS" "$INPUT_SOURCE_TYPE" "$INPUT_SUBFOLDER"
+            # ▲▲▲ 変更点 ▲▲▲
           done
 
-      # ▼▼▼ 変更点 ▼▼▼
       - name: ダウンロードされたファイルの確認
         run: |
           echo "ダウンロードされたファイル:"
-          ls -la "nerdcore technos"/
-      # ▲▲▲ 変更点 ▲▲▲
+          # nerdcore technos フォルダ全体を再帰的に表示
+          ls -laR "nerdcore technos"/
 
-      # ▼▼▼ 変更点 ▼▼▼
       - name: ファイルの存在確認とGitへの追加
         run: |
-          IFS=$'\n' read -d '' -r -a MUSIC_FILES < <(find "nerdcore technos" -type f -name "*.flac" && printf '\0')
+          # ▼▼▼ 変更点 ▼▼▼
+          # .mp3 ファイルを探すように変更
+          IFS=$'\n' read -d '' -r -a MUSIC_FILES < <(find "nerdcore technos" -type f -name "*.mp3" && printf '\0')
+          # ▲▲▲ 変更点 ▲▲▲
 
           if [ ${#MUSIC_FILES[@]} -gt 0 ]; then
             echo "音楽ファイルが見つかりました"
@@ -92,7 +95,6 @@ jobs:
             echo "音楽ファイルが見つかりません"
             exit 1
           fi
-      # ▲▲▲ 変更点 ▲▲▲
 
       - name: 変更の確認とコミット
         run: |
