@@ -10,8 +10,10 @@ from html.parser import HTMLParser
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ▼▼▼ 変更点 ▼▼▼
 # ダウンロードフォルダ
-DOWNLOAD_DIR = "downloads"
+DOWNLOAD_DIR = "nerdcore technos"
+# ▲▲▲ 変更点 ▲▲▲
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 class LinkParser(HTMLParser):
@@ -24,8 +26,8 @@ class LinkParser(HTMLParser):
         if tag == 'a':
             for name, value in attrs:
                 if name == 'href' and (
-                    value.endswith('.mp3') or 
-                    value.endswith('.wav') or  
+                    value.endswith('.mp3') or
+                    value.endswith('.wav') or
                     value.endswith('.m4a')
                 ):
                     full_url = urljoin(self.base_url, value)
@@ -35,14 +37,13 @@ class MusicDownloader:
     def __init__(self):
         self.ydl_opts = {
             'format': 'bestaudio/best',
-            'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
             # ▼▼▼ 変更点 ▼▼▼
-            # ポストプロセッサを追加し、音声形式をflacに指定
+            'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
+            # ▲▲▲ 変更点 ▲▲▲
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'flac',
             }],
-            # ▲▲▲ 変更点 ▲▲▲
             'extract_flat': False,
             'noplaylist': False,
             'ignoreerrors': False,
@@ -54,31 +55,31 @@ class MusicDownloader:
         """指定されたURLからトラックをダウンロード"""
         try:
             logger.info(f"🎵 解析とダウンロードを開始: {url}")
-            
+
             # ソースタイプの判定
             if source_type == 'auto_detect':
                 source_type = self.detect_source_type(url)
-            
+
             # ソースタイプに基づいたダウンロード
             if source_type in ['soundcloud', 'bandcamp', 'direct_link']:
                 if not any(platform in url for platform in ['soundcloud.com', 'bandcamp.com']):
                     logger.error("🚫 SoundCloudまたはBandcampのURLを指定してください。")
                     return False
-            
+
             # スクレイピングして内部リンクを取得
             internal_links = []
             if scrape_internal_links or source_type == 'archive':
                 internal_links = self.scrape_internal_links(url)
-            
+
             # URLをダウンロード
             self.download_track(url)
-            
+
             # スクレイピングしたリンクもダウンロード
             for link in internal_links:
                 self.download_track(link)
-                
+
             return True
-            
+
         except Exception as e:
             logger.error(f"⚠️ 予期せぬエラーが発生: {str(e)}")
             return False
@@ -97,7 +98,7 @@ class MusicDownloader:
     def scrape_internal_links(self, url):
         """指定されたURLから内部リンクをスクレイピング"""
         logger.info(f"🔍 内部リンクをスクレイピング中: {url}")
-        
+
         # URLからHTMLを取得
         try:
             with urlopen(url) as response:
@@ -109,7 +110,7 @@ class MusicDownloader:
         # リンクを解析
         parser = LinkParser(url)
         parser.feed(html)
-        
+
         logger.info(f"✨ 見つかった内部リンク: {parser.links}")
         return parser.links
 
@@ -136,7 +137,7 @@ def main():
     urls = sys.argv[1:-2]
 
     downloader = MusicDownloader()
-    
+
     for url in urls:
         success = downloader.download(url, scrape_internal_links, source_type)
         if not success:
